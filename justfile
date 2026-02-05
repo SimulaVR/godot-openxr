@@ -4,6 +4,10 @@ default:
     just --list
 
 build:
+    just build-only
+    just install
+
+build-only:
     @echo "Building godot-openxr..."
     @echo "Using Godot path: {{godot_path}}"
     
@@ -31,6 +35,10 @@ build:
     
     # Build godot-openxr
     scons platform=linux target=release godot_path={{godot_path}} CXXFLAGS=-std=gnu++17 -j$(nproc)
+
+install:
+    mkdir -p ../../addons/godot-openxr/bin/linux/
+    cp demo/addons/godot-openxr/bin/linux/libgodot_openxr.so ../../addons/godot-openxr/bin/linux/libgodot_openxr.so
 
 clean:
     scons -c
