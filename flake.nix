@@ -33,14 +33,36 @@
           default = (pkgs.callPackage ./default.nix {
             godot = godot;
           }).overrideAttrs (old: {
-            # In flakes, submodules are not automatically fetched or available in self.
-            # We explicitly copy the pinned godot-cpp input (which includes submodules).
             preBuild = ''
               rm -rf thirdparty/godot-cpp
               cp -r --no-preserve=mode ${godot-cpp} thirdparty/godot-cpp
               chmod -R u+w thirdparty/godot-cpp
             '' + old.preBuild;
           });
+        });
+
+      devShells = forAllSystems (system:
+        let
+          pkgs = pkgsFor system;
+        in
+        {
+          default = pkgs.mkShell {
+            nativeBuildInputs = [
+              pkgs.scons
+              pkgs.pkg-config
+              pkgs.python3
+            ];
+
+            buildInputs = [
+              pkgs.openxr-loader
+              pkgs.libglvnd
+              pkgs.xorg.libX11
+            ];
+            
+            # Allow just to see where godot source is
+            GODOT_PATH = godot;
+            GODOT_CPP_PATH = godot-cpp;
+          };
         });
     };
 }
