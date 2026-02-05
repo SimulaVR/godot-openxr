@@ -1,0 +1,65 @@
+{
+  "nodes": {
+    "godot": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1761869500,
+        "narHash": "sha256-GVC1G39Av4WI9WWWQZorkgnSysIuxREDqa+h7tH7TL8=",
+        "owner": "SimulaVR",
+        "repo": "godot",
+        "rev": "68f6b2c5277681939267da2628181c0265bc24c2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "SimulaVR",
+        "ref": "3.x-simula",
+        "repo": "godot",
+        "type": "github"
+      }
+    },
+    "godot-cpp": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1636036760,
+        "narHash": "sha256-Vp3MELRr+WX7gnWl2IgSNbiZ0G4RSIdKepErZBm2sQk=",
+        "ref": "refs/heads/master",
+        "rev": "68ce78179f90be9bec8cc88106dba0c244bdc4f6",
+        "revCount": 516,
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/godotengine/godot-cpp"
+      },
+      "original": {
+        "rev": "68ce78179f90be9bec8cc88106dba0c244bdc4f6",
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/godotengine/godot-cpp"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1770197578,
+        "narHash": "sha256-AYqlWrX09+HvGs8zM6ebZ1pwUqjkfpnv8mewYwAo+iM=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "00c21e4c93d963c50d4c0c89bfa84ed6e0694df2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "godot": "godot",
+        "godot-cpp": "godot-cpp",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
