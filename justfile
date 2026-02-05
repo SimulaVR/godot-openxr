@@ -4,10 +4,6 @@ default:
     just --list
 
 build:
-    just build-only
-    just install
-
-build-only:
     @echo "Building godot-openxr..."
     @echo "Using Godot path: {{godot_path}}"
     
