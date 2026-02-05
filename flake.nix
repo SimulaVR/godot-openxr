@@ -51,6 +51,7 @@
               pkgs.scons
               pkgs.pkg-config
               pkgs.python3
+              pkgs.just
             ];
 
             buildInputs = [
