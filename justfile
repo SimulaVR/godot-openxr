@@ -1,4 +1,4 @@
-godot_path := env_var_or_default("GODOT_PATH", "../../godot")
+godot_path := env_var_or_default("GODOT_PATH", "../godot")
 
 build:
     @echo "Building godot-openxr..."

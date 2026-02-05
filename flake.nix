@@ -59,10 +59,6 @@
               pkgs.libglvnd
               pkgs.xorg.libX11
             ];
-            
-            # Allow just to see where godot source is
-            GODOT_PATH = godot;
-            GODOT_CPP_PATH = godot-cpp;
           };
         });
     };
