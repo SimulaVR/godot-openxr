@@ -1,6 +1,17 @@
 godot_path := env_var_or_default("GODOT_PATH", "../godot")
 
+default:
+    just --list
+
 build:
+    @if ! command -v scons &> /dev/null; then \
+        echo "scons not found. Attempting to run inside nix develop..."; \
+        nix develop --command just build-impl; \
+    else \
+        just build-impl; \
+    fi
+
+build-impl:
     @echo "Building godot-openxr..."
     @echo "Using Godot path: {{godot_path}}"
     
@@ -30,5 +41,10 @@ build:
     scons platform=linux target=release godot_path={{godot_path}} CXXFLAGS=-std=gnu++17 -j$(nproc)
 
 clean:
-    scons -c
-    cd thirdparty/godot-cpp && scons -c
+    @if ! command -v scons &> /dev/null; then \
+        nix develop --command scons -c; \
+        nix develop --command bash -c "cd thirdparty/godot-cpp && scons -c"; \
+    else \
+        scons -c; \
+        cd thirdparty/godot-cpp && scons -c; \
+    fi
