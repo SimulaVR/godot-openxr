@@ -4,14 +4,6 @@ default:
     just --list
 
 build:
-    @if ! command -v scons &> /dev/null; then \
-        echo "scons not found. Attempting to run inside nix develop..."; \
-        nix develop --command just build-impl; \
-    else \
-        just build-impl; \
-    fi
-
-build-impl:
     @echo "Building godot-openxr..."
     @echo "Using Godot path: {{godot_path}}"
     
@@ -41,10 +33,6 @@ build-impl:
     scons platform=linux target=release godot_path={{godot_path}} CXXFLAGS=-std=gnu++17 -j$(nproc)
 
 clean:
-    @if ! command -v scons &> /dev/null; then \
-        nix develop --command scons -c; \
-        nix develop --command bash -c "cd thirdparty/godot-cpp && scons -c"; \
-    else \
-        scons -c; \
-        cd thirdparty/godot-cpp && scons -c; \
-    fi
+    scons -c
+    cd thirdparty/godot-cpp && scons -c
+
