@@ -37,6 +37,8 @@
 // linux
 #define GL_GLEXT_PROTOTYPES 1
 #define GL3_PROTOTYPES 1
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
 #include <GL/gl.h>
 #include <GL/glext.h>
 
@@ -173,6 +175,7 @@ private:
 
 	// extensions
 	bool monado_stick_on_ball_ext = false;
+	bool monado_egl_enable_ext = false;
 
 	std::vector<const char *> enabled_extensions;
 	std::set<XRExtensionWrapper *> registered_extension_wrappers;
@@ -187,8 +190,6 @@ private:
 	String system_name;
 	uint32_t vendor_id = 0;
 
-	bool is_steamvr = false;
-
 	bool keep_3d_linear = false;
 #ifdef WIN32
 	XrGraphicsBindingOpenGLWin32KHR graphics_binding_gl;
@@ -197,7 +198,13 @@ private:
 	XrGraphicsBindingOpenGLESAndroidKHR graphics_binding_gl;
 	XrSwapchainImageOpenGLESKHR **images = nullptr;
 #else
+	enum LinuxGraphicsBindingType {
+		LINUX_GRAPHICS_BINDING_GLX,
+		LINUX_GRAPHICS_BINDING_EGL
+	};
+	LinuxGraphicsBindingType linux_graphics_binding_type = LINUX_GRAPHICS_BINDING_GLX;
 	XrGraphicsBindingOpenGLXlibKHR graphics_binding_gl;
+	XrGraphicsBindingEGLMNDX graphics_binding_egl;
 	XrSwapchainImageOpenGLKHR **images = nullptr;
 #endif
 	float render_target_size_multiplier = 1.0f;

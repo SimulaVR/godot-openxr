@@ -8,6 +8,7 @@
 #define XR_USE_GRAPHICS_API_OPENGL_ES
 #else
 #define XR_USE_PLATFORM_XLIB
+#define XR_USE_PLATFORM_EGL
 #define XR_USE_GRAPHICS_API_OPENGL
 #endif
 

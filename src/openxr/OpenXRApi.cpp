@@ -1631,6 +1631,9 @@ bool OpenXRApi::initialiseInstance() {
 	request_extensions[XR_KHR_ANDROID_THREAD_SETTINGS_EXTENSION_NAME] = nullptr;
 #else
 	request_extensions[XR_KHR_OPENGL_ENABLE_EXTENSION_NAME] = nullptr;
+#if !defined(WIN32)
+	request_extensions[XR_MNDX_EGL_ENABLE_EXTENSION_NAME] = &monado_egl_enable_ext;
+#endif
 #endif
 
 	// If we have these, we use them, if not we skip related logic..
@@ -1639,7 +1642,7 @@ bool OpenXRApi::initialiseInstance() {
 	for (auto &requested_extension : request_extensions) {
 		if (!isExtensionSupported(requested_extension.first, extensionProperties, extensionCount)) {
 			if (requested_extension.second == nullptr) {
-				Godot::print_error("OpenXR Runtime does not support OpenGL extension!", __FUNCTION__, __FILE__, __LINE__);
+				Godot::print_error("OpenXR runtime is missing a required extension.", __FUNCTION__, __FILE__, __LINE__);
 				free(extensionProperties);
 				return false;
 			} else {
@@ -1727,17 +1730,6 @@ bool OpenXRApi::initialiseInstance() {
 			XR_VERSION_MAJOR(instanceProps.runtimeVersion),
 			XR_VERSION_MINOR(instanceProps.runtimeVersion),
 			XR_VERSION_PATCH(instanceProps.runtimeVersion));
-
-	if (strcmp(instanceProps.runtimeName, "SteamVR/OpenXR") == 0) {
-#ifdef WIN32
-		// not applicable
-#elif ANDROID
-		// not applicable
-#elif __linux__
-		Godot::print("Running on Linux, using SteamVR workaround for issue https://github.com/ValveSoftware/SteamVR-for-Linux/issues/421");
-#endif
-		is_steamvr = true;
-	}
 
 	return true;
 }
@@ -1861,40 +1853,69 @@ bool OpenXRApi::initialiseSession() {
 	graphics_binding_gl.config = (EGLConfig)0; // https://github.com/KhronosGroup/OpenXR-SDK-Source/blob/master/src/tests/hello_xr/graphicsplugin_opengles.cpp#L122
 	graphics_binding_gl.context = eglGetCurrentContext();
 #else
-	graphics_binding_gl = (XrGraphicsBindingOpenGLXlibKHR){
-		.type = XR_TYPE_GRAPHICS_BINDING_OPENGL_XLIB_KHR,
-		.next = nullptr,
-	};
+	const EGLDisplay current_egl_display = eglGetCurrentDisplay();
+	const EGLContext current_egl_context = eglGetCurrentContext();
+	const bool has_egl_context = current_egl_display != EGL_NO_DISPLAY && current_egl_context != EGL_NO_CONTEXT;
+	const bool wants_egl_binding = monado_egl_enable_ext && has_egl_context;
+	const XrBaseInStructure *session_binding = nullptr;
 
-	void *display_handle = (void *)os->get_native_handle(OS::DISPLAY_HANDLE);
-	void *glxcontext_handle = (void *)os->get_native_handle(OS::OPENGL_CONTEXT);
-	void *glxdrawable_handle = (void *)os->get_native_handle(OS::WINDOW_HANDLE);
+	if (wants_egl_binding) {
+		linux_graphics_binding_type = LINUX_GRAPHICS_BINDING_EGL;
+		graphics_binding_egl = (XrGraphicsBindingEGLMNDX){
+			.type = XR_TYPE_GRAPHICS_BINDING_EGL_MNDX,
+			.next = nullptr,
+		};
+		graphics_binding_egl.getProcAddress = eglGetProcAddress;
+		graphics_binding_egl.display = current_egl_display;
+		graphics_binding_egl.context = current_egl_context;
+		graphics_binding_egl.config = (EGLConfig)0;
+		session_binding = reinterpret_cast<const XrBaseInStructure *>(&graphics_binding_egl);
 
-	graphics_binding_gl.xDisplay = (Display *)display_handle;
-	graphics_binding_gl.glxContext = (GLXContext)glxcontext_handle;
-	graphics_binding_gl.glxDrawable = (GLXDrawable)glxdrawable_handle;
+		Godot::print("OpenXR Linux graphics binding: EGL_MNDX (display {0}, context {1})",
+				(uintptr_t)graphics_binding_egl.display,
+				(uintptr_t)graphics_binding_egl.context);
+	} else {
+		linux_graphics_binding_type = LINUX_GRAPHICS_BINDING_GLX;
+		if (monado_egl_enable_ext && !has_egl_context) {
+			Godot::print("OpenXR Linux EGL binding available but no EGL context; falling back to GLX");
+		}
 
-	if (graphics_binding_gl.xDisplay == nullptr) {
-		Godot::print("OpenXR Failed to get xDisplay from Godot, using XOpenDisplay(nullptr)");
-		graphics_binding_gl.xDisplay = XOpenDisplay(nullptr);
+		graphics_binding_gl = (XrGraphicsBindingOpenGLXlibKHR){
+			.type = XR_TYPE_GRAPHICS_BINDING_OPENGL_XLIB_KHR,
+			.next = nullptr,
+		};
+
+		void *display_handle = (void *)os->get_native_handle(OS::DISPLAY_HANDLE);
+		void *glxcontext_handle = (void *)os->get_native_handle(OS::OPENGL_CONTEXT);
+		void *glxdrawable_handle = (void *)os->get_native_handle(OS::WINDOW_HANDLE);
+
+		graphics_binding_gl.xDisplay = (Display *)display_handle;
+		graphics_binding_gl.glxContext = (GLXContext)glxcontext_handle;
+		graphics_binding_gl.glxDrawable = (GLXDrawable)glxdrawable_handle;
+
+		if (graphics_binding_gl.xDisplay == nullptr) {
+			Godot::print("OpenXR Failed to get xDisplay from Godot, using XOpenDisplay(nullptr)");
+			graphics_binding_gl.xDisplay = XOpenDisplay(nullptr);
+		}
+		if (graphics_binding_gl.glxContext == nullptr) {
+			Godot::print("OpenXR Failed to get glxContext from Godot, using glXGetCurrentContext()");
+			graphics_binding_gl.glxContext = glXGetCurrentContext();
+		}
+		if (graphics_binding_gl.glxDrawable == 0) {
+			Godot::print("OpenXR Failed to get glxDrawable from Godot, using glXGetCurrentDrawable()");
+			graphics_binding_gl.glxDrawable = glXGetCurrentDrawable();
+		}
+
+		// spec says to use proper values but runtimes don't care
+		graphics_binding_gl.visualid = 0;
+		graphics_binding_gl.glxFBConfig = 0;
+		session_binding = reinterpret_cast<const XrBaseInStructure *>(&graphics_binding_gl);
+
+		Godot::print("OpenXR Linux graphics binding: GLX_XLIB (display {0}, context {1}, drawable {2})",
+				(uintptr_t)graphics_binding_gl.xDisplay,
+				(uintptr_t)graphics_binding_gl.glxContext,
+				(uintptr_t)graphics_binding_gl.glxDrawable);
 	}
-	if (graphics_binding_gl.glxContext == nullptr) {
-		Godot::print("OpenXR Failed to get glxContext from Godot, using glXGetCurrentContext()");
-		graphics_binding_gl.glxContext = glXGetCurrentContext();
-	}
-	if (graphics_binding_gl.glxDrawable == 0) {
-		Godot::print("OpenXR Failed to get glxDrawable from Godot, using glXGetCurrentDrawable()");
-		graphics_binding_gl.glxDrawable = glXGetCurrentDrawable();
-	}
-
-	// spec says to use proper values but runtimes don't care
-	graphics_binding_gl.visualid = 0;
-	graphics_binding_gl.glxFBConfig = 0;
-
-	Godot::print("OpenXR Graphics: Display {0}, Context {1} Drawable {2}",
-			(uintptr_t)graphics_binding_gl.xDisplay,
-			(uintptr_t)graphics_binding_gl.glxContext,
-			(uintptr_t)graphics_binding_gl.glxDrawable);
 #endif
 
 	Godot::print("OpenXR Using OpenGL version: {0}", (char *)glGetString(GL_VERSION));
@@ -1902,7 +1923,14 @@ bool OpenXRApi::initialiseSession() {
 
 	XrSessionCreateInfo session_create_info = {
 		.type = XR_TYPE_SESSION_CREATE_INFO,
-		.next = &graphics_binding_gl,
+		.next =
+#ifdef WIN32
+				&graphics_binding_gl,
+#elif ANDROID
+				&graphics_binding_gl,
+#else
+				session_binding,
+#endif
 		.createFlags = 0,
 		.systemId = systemId
 	};
@@ -2480,6 +2508,10 @@ void OpenXRApi::uninitialize() {
 	view_pose_valid = false;
 	head_pose_valid = false;
 	monado_stick_on_ball_ext = false;
+	monado_egl_enable_ext = false;
+#if !defined(WIN32) && !defined(ANDROID)
+	linux_graphics_binding_type = LINUX_GRAPHICS_BINDING_GLX;
+#endif
 	running = false;
 	initialised = false;
 }
@@ -3209,16 +3241,6 @@ void OpenXRApi::render_openxr(int eye, uint32_t texid, bool has_external_texture
 		end_frame(static_cast<uint32_t>(layers_list.size()), layers_list.data());
 	}
 
-#ifdef WIN32
-	// not applicable
-#elif ANDROID
-	// not applicable
-#elif __linux__
-	// TODO: should not be necessary, but is for SteamVR since 1.16.x
-	if (is_steamvr) {
-		glXMakeCurrent(graphics_binding_gl.xDisplay, graphics_binding_gl.glxDrawable, graphics_binding_gl.glxContext);
-	}
-#endif
 }
 
 void OpenXRApi::fill_projection_matrix(int eye, godot_real p_z_near, godot_real p_z_far, godot_real *p_projection) {
@@ -3588,17 +3610,6 @@ int OpenXRApi::get_external_texture_for_eye(int eye, bool *has_support) {
 		return 0;
 	}
 
-#ifdef WIN32
-	// not applicable
-#elif ANDROID
-	// not applicable
-#elif __linux__
-	// TODO: should not be necessary, but is for SteamVR since 1.16.x
-	if (is_steamvr) {
-		glXMakeCurrent(graphics_binding_gl.xDisplay, graphics_binding_gl.glxDrawable, graphics_binding_gl.glxContext);
-	}
-#endif
-
 	// process should be called by now but just in case...
 	if (state > XR_SESSION_STATE_UNKNOWN && buffer_index != nullptr) {
 		// make sure we know that we're rendering directly to our
@@ -3871,16 +3882,6 @@ void OpenXRApi::process_openxr() {
 		// See render_openxr() for the corresponding early exit.
 	}
 
-#ifdef WIN32
-	// not applicable
-#elif ANDROID
-	// not applicable
-#elif __linux__
-	// TODO: should not be necessary, but is for SteamVR since 1.16.x
-	if (is_steamvr) {
-		glXMakeCurrent(graphics_binding_gl.xDisplay, graphics_binding_gl.glxDrawable, graphics_binding_gl.glxContext);
-	}
-#endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////
