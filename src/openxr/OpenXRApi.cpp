@@ -10,6 +10,7 @@
 #include "openxr/OpenXRApi.h"
 #include "openxr/include/signals_util.h"
 #include "openxr/include/util.h"
+#include "openxr/simula_monado_hud_timing.h"
 
 #include <algorithm>
 #include <cmath>
@@ -3782,6 +3783,8 @@ void OpenXRApi::process_openxr() {
 		return;
 	}
 
+	const bool simula_monado_hud_timing_active = simula_openxr_debug_monado_hud_is_active();
+
 	if (!poll_events()) {
 		return;
 	}
@@ -3801,13 +3804,27 @@ void OpenXRApi::process_openxr() {
 	frameState.predictedDisplayTime = 0;
 	frameState.predictedDisplayPeriod = 0;
 	frameState.shouldRender = false;
+	const uint64_t simula_before_xr_wait_frame_ns =
+			simula_monado_hud_timing_active ? simula_openxr_debug_monado_hud_now_ns() : 0;
 	result = xrWaitFrame(session, &frameWaitInfo, &frameState);
+	const uint64_t simula_after_xr_wait_frame_ns =
+			simula_monado_hud_timing_active ? simula_openxr_debug_monado_hud_now_ns() : 0;
+	const uint64_t simula_godot_frame_start_ns =
+			simula_monado_hud_timing_active
+			? simula_openxr_debug_monado_hud_valid_godot_frame_start_ns(simula_before_xr_wait_frame_ns)
+			: 0;
 	if (!xr_result(result, "xrWaitFrame() was not successful, exiting...")) {
 		// reset just in case
 		frameState.predictedDisplayTime = 0;
 		frameState.predictedDisplayPeriod = 0;
 		frameState.shouldRender = false;
 		return;
+	}
+
+	if (simula_monado_hud_timing_active && simula_godot_frame_start_ns != 0) {
+		simula_openxr_debug_monado_hud_record_sample(
+				static_cast<double>(simula_before_xr_wait_frame_ns - simula_godot_frame_start_ns) / 1000000.0,
+				static_cast<double>(simula_after_xr_wait_frame_ns - simula_before_xr_wait_frame_ns) / 1000000.0);
 	}
 
 	if (frameState.predictedDisplayPeriod > 500000000) {
